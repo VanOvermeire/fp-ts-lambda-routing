@@ -1,0 +1,24 @@
+{
+  "name": "fp-ts-lambda-routing",
+  "version": "0.0.1",
+  "description": "Library that helps with routing lambda events to the right function, wrapped in an fp-ts monad",
+  "scripts": {
+    "build": "tsc"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "keywords": [],
+  "author": "Sam Van Overmeire",
+  "license": "ISC",
+  "dependencies": {
+    "@types/aws-lambda": "^8.10.81",
+    "fp-ts": "^2.11.1"
+  },
+  "devDependencies": {
+    "@types/jest": "26.0.15",
+    "jest": "^26.0.0",
+    "ts-jest": "^26.0.0",
+    "fp-ts-std": "^0.10.1",
+    "typescript": "^4.3.5"
+  }
+}
