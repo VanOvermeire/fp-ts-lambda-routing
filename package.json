@@ -18,10 +18,10 @@
   "scripts": {
     "test": "jest",
     "build": "rm -rf dist && tsc && cp README.md dist && cp package.json dist",
-    "publish": "npm run test && npm run build && npm publish dist --access public && npm version patch"
+    "publish": "npm run test && npm run build && cd dist && npm publish --access public && npm version patch"
   },
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "index.js",
+  "types": "index.d.ts",
   "author": "Sam Van Overmeire",
   "license": "MIT",
   "dependencies": {

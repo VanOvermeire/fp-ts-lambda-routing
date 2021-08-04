@@ -77,6 +77,7 @@ const example = () => {
     )();
 };
 
+// prints 'OK'
 example().then(console.log);
 ```
 
