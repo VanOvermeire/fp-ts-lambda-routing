@@ -1,53 +1,60 @@
-import type { TaskEither } from 'fp-ts/TaskEither';
-import type {APIGatewayEvent} from "aws-lambda";
+import type {TaskEither} from 'fp-ts/TaskEither';
 import * as TE from 'fp-ts/TaskEither';
+import * as O from 'fp-ts/Option';
+import {Accumulated, AnyApiGatewayEvent, RouterFunction} from "./types";
+import {findPathInEvent} from "./helpers";
+import {pipe} from "fp-ts/function";
 
-// TODO also offer Either? further abstract concrete monad type?
-// TODO other locations for lambda path?
-
-export type RouterFunction<T, R> = (e: APIGatewayEvent) => TaskEither<T, R>;
+const defaultErrorConstructor = <T>(path: string) => (`No route found for ${path}` as unknown as T);
 
 const matchRoute = (path: string) => (route: string) => {
     const routeWithForwardSlash = route.startsWith("/") ? route : `/${route}`;
-    const pathWithForwardSlash = path.startsWith("/") ? route : `/${path}`;
+    const pathWithForwardSlash = path.startsWith("/") ? path : `/${path}`;
 
     if (routeWithForwardSlash.endsWith("*")) {
         return pathWithForwardSlash.startsWith(routeWithForwardSlash.replace("*", ""));
     }
-    return routeWithForwardSlash === path;
+    return routeWithForwardSlash === pathWithForwardSlash;
 }
 
-const findApp = <T, R>(path: string) => (endpoints: Record<string, RouterFunction<T, R>>): RouterFunction<T, R> | undefined => {
-    const matchRouteForPath = matchRoute(path);
-
-    Object.entries(endpoints)
-        .filter(routeMapping => matchRouteForPath(routeMapping[0]))
-        .reduce((acc: RouterFunction<T, R>[], curr) => {
-            if(acc.length === 0) {
-                acc.push(curr[1]);
-            }
-
-            return acc;
-        }, [])
-        // .map(routeMapping => routeMapping[1])
-        .shift();
-
-    return Object.entries(endpoints)
-        .filter(routeMapping => matchRouteForPath(routeMapping[0]))
-        .map(routeMapping => routeMapping[1])
-        .shift();
-    // instead: reduce
-}
-
-
-const internalRouter = <T, R>(endpoints: Record<string, RouterFunction<T, R>>, errorConstructor: (err: string) => T) => (event: APIGatewayEvent): TaskEither<T, R> => {
-    const path = event.path ?? 'undefined';
-    const rightEndpoint = findApp(path)(endpoints);
-
-    return rightEndpoint ? rightEndpoint(event) as TaskEither<T, R> : TE.left(errorConstructor(`No route found for path ${path}`)); // is this assertion necessary?
+const getBestPath = <T, R>(acc: Accumulated<T, R>, curr: Accumulated<T, R>) => {
+    if (!acc) {
+        acc = curr;
+    } else if (!curr.path?.includes('*')) {
+        acc = curr;
+    } else if (curr.path?.length > (acc.path?.length ?? 0)) {
+        acc = curr;
+    }
+    return acc;
 };
 
-export function router<T, R>(endpoints: Record<string, RouterFunction<T, R>>, errorConstructor: (err: string) => T): (event: APIGatewayEvent) => TaskEither<T, R>;
-export function router<T, R>(endpoints: Record<string, RouterFunction<T, R>>, errorConstructor: (err: string) => T) {
+const searchEndpoints = <T, R>(endpoints: Record<string, RouterFunction<T, R>>) => (path: string): O.Option<RouterFunction<T, R>> => {
+    const matchRouteForPath = matchRoute(path);
+
+    const t = Object.entries(endpoints)
+        .filter(routeMapping => matchRouteForPath(routeMapping[0]))
+        .map(routeMapping => ({path: routeMapping[0], function: routeMapping[1]}))
+        .reduce(getBestPath, {} as Accumulated<T, R>);
+
+    return O.fromNullable(t.function);
+};
+
+const internalRouter = <T, R>(endpoints: Record<string, RouterFunction<T, R>>, errorConstructor: (path: string) => T) => (event: AnyApiGatewayEvent): TaskEither<T, R> => {
+    const searchGivenEndpoints = searchEndpoints(endpoints);
+
+    return pipe(
+        findPathInEvent(event),
+        O.chain(searchGivenEndpoints),
+        O.map(endpoint => endpoint(event)),
+        O.getOrElse(() => TE.left(
+            errorConstructor(
+                O.getOrElse(() => 'undefined')(findPathInEvent(event))
+            ))
+        ),
+    );
+};
+
+export function router<T, R>(endpoints: Record<string, RouterFunction<T, R>>, errorConstructor?: (err: string) => T): (event: AnyApiGatewayEvent) => TaskEither<T, R>;
+export function router<T, R>(endpoints: Record<string, RouterFunction<T, R>>, errorConstructor: (err: string) => T = defaultErrorConstructor) {
     return internalRouter(endpoints, errorConstructor);
 }

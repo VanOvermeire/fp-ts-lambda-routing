@@ -7,13 +7,13 @@
     "routing",
     "functional"
   ],
-  "homepage": "https://github.com/TODO/package-name",
+  "homepage": "https://github.com/VanOvermeire/fp-ts-lambda-routing",
   "repository": {
     "type": "git",
-    "url": "https://github.com/TODO/package-name.git"
+    "url": "https://github.com/VanOvermeire/fp-ts-lambda-routing.git"
   },
   "bugs": {
-    "url": "https://github.com/TODO/package-name/issues"
+    "url": "https://github.com/VanOvermeire/fp-ts-lambda-routing/issues"
   },
   "scripts": {
     "test": "jest",
