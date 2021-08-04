@@ -18,7 +18,7 @@
   "scripts": {
     "test": "jest",
     "build": "rm -rf dist && tsc && cp README.md dist && cp package.json dist",
-    "publish": "npm run test && npm run build && cd dist && npm publish --access public && npm version patch"
+    "build-and-publish": "npm run test && npm run build && cd dist && npm publish --access public && cd .. && npm version patch"
   },
   "main": "index.js",
   "types": "index.d.ts",
