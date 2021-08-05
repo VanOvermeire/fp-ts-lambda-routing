@@ -17,7 +17,9 @@ const unWrapper = <R, S>(t: TE.TaskEither<R, S>) =>
 describe('router tests',  () => {
     test('should return a left for a missing path', async () => {
         const dict = {
-            '/foo': fooFunction,
+            '/foo': {
+                'POST': fooFunction
+            },
         };
         const eventWithoutPath = {} as APIGatewayEvent;
 
@@ -32,10 +34,13 @@ describe('router tests',  () => {
 
     test('should return a left for an unknown path', async () => {
         const dict = {
-            '/foo': fooFunction,
+            '/foo': {
+                'POST': fooFunction
+            },
         };
         const exampleEvent = {
-            path: '/bar'
+            path: '/bar',
+            httpMethod: 'POST',
         } as APIGatewayEvent;
 
         const routerForDict = router(dict);
@@ -49,12 +54,15 @@ describe('router tests',  () => {
 
     test('should return a left for an unknown in a v2 event', async () => {
         const dict = {
-            '/foo': fooFunction,
+            '/foo': {
+                'POST': fooFunction
+            },
         };
         const exampleEvent = {
             requestContext: {
                 http: {
                     path: '/bar',
+                    method: 'POST',
                 }
             }
         } as APIGatewayProxyEventV2;
@@ -70,7 +78,9 @@ describe('router tests',  () => {
 
     test('should return a left for a missing path with custom error constructor', async () => {
         const dict = {
-            '/foo': fooFunction,
+            '/foo': {
+                'POST': fooFunction
+            },
         };
         const eventWithoutPath = {} as APIGatewayEvent;
 
@@ -85,7 +95,9 @@ describe('router tests',  () => {
 
     test('should return a left for a missing path with more complex custom error constructor', async () => {
         const dict = {
-            '/foo': fooFunction,
+            '/foo': {
+                'POST': fooFunction
+            },
         };
         const eventWithoutPath = {} as APIGatewayEvent;
         const errorConstructor = (path: string) => {
@@ -107,13 +119,18 @@ describe('router tests',  () => {
 
     test('should call right function for simple path', async () => {
         const dict = {
-            '/foo': fooFunction,
-            '/bar': barFunction,
+            '/foo': {
+                'POST': fooFunction
+            },
+            '/bar': {
+                'GET': barFunction,
+            },
         };
         const exampleEvent = {
             requestContext: {
                 http: {
                     path: '/foo',
+                    method: 'POST'
                 }
             }
         } as APIGatewayProxyEventV2;
@@ -129,47 +146,16 @@ describe('router tests',  () => {
 
     test('should call right function for simple path in a V2 event', async () => {
         const dict = {
-            '/foo': fooFunction,
-            '/bar': barFunction,
+            '/foo': {
+                'POST': fooFunction
+            },
+            '/bar': {
+                'GET': barFunction,
+            },
         };
         const exampleEvent = {
             path: '/foo',
-        } as APIGatewayEvent;
-
-        const routerForDict = router(dict);
-
-        const result = await unWrapper(
-            routerForDict(exampleEvent)
-        );
-
-        expect(result).toEqual('Foo');
-    });
-
-    test('should call right function when endpoint is missing forward slash', async () => {
-        const dict = {
-            'foo': fooFunction,
-            '/bar': barFunction,
-        };
-        const exampleEvent = {
-            path: '/foo',
-        } as APIGatewayEvent;
-
-        const routerForDict = router(dict);
-
-        const result = await unWrapper(
-            routerForDict(exampleEvent)
-        );
-
-        expect(result).toEqual('Foo');
-    });
-
-    test('should call right function when path is missing forward slash', async () => {
-        const dict = {
-            '/foo': fooFunction,
-            '/bar': barFunction,
-        };
-        const exampleEvent = {
-            path: 'foo',
+            httpMethod: 'POST',
         } as APIGatewayEvent;
 
         const routerForDict = router(dict);
@@ -183,11 +169,16 @@ describe('router tests',  () => {
 
     test('should call right function when path and endpoint are missing forward slash', async () => {
         const dict = {
-            'foo': fooFunction,
-            'bar': barFunction,
+            'foo': {
+                'POST': fooFunction
+            },
+            'bar': {
+                'GET': barFunction,
+            },
         };
         const exampleEvent = {
             path: 'foo',
+            httpMethod: 'POST',
         } as APIGatewayEvent;
 
         const routerForDict = router(dict);
@@ -201,11 +192,16 @@ describe('router tests',  () => {
 
     test('should call right function when path ends with wildcard', async () => {
         const dict = {
-            '/foo/*': fooFunction,
-            '/bar': barFunction,
+            '/foo/*': {
+                'POST': fooFunction
+            },
+            '/bar': {
+                'GET': barFunction,
+            },
         };
         const exampleEvent = {
             path: '/foo/bar',
+            httpMethod: 'POST',
         } as APIGatewayEvent;
 
         const routerForDict = router(dict);
@@ -219,49 +215,16 @@ describe('router tests',  () => {
 
     test('should prefer an exact match', async () => {
         const dict = {
-            '/foo/*': fooAltFunction,
-            '/foo/bar': fooFunction,
+            '/foo/*': {
+                'POST': fooAltFunction
+            },
+            '/foo/bar': {
+                'GET': fooFunction,
+            },
         };
         const exampleEvent = {
             path: '/foo/bar',
-        } as APIGatewayEvent;
-
-        const routerForDict = router(dict);
-
-        const result = await unWrapper(
-            routerForDict(exampleEvent)
-        );
-
-        expect(result).toEqual('Foo');
-    });
-
-    test('should prefer a longer path', async () => {
-        const dict = {
-            '/foo/*': fooAltFunction,
-            '/foo/more/specific/*': fooFunction,
-            '/bar': barFunction,
-        };
-        const exampleEvent = {
-            path: '/foo/more/specific/path',
-        } as APIGatewayEvent;
-
-        const routerForDict = router(dict);
-
-        const result = await unWrapper(
-            routerForDict(exampleEvent)
-        );
-
-        expect(result).toEqual('Foo');
-    });
-
-    test('should prefer a longer path regardless of when it appears', async () => {
-        const dict = {
-            '/foo/more/specific/*': fooFunction,
-            '/foo/*': fooAltFunction,
-            '/bar': barFunction,
-        };
-        const exampleEvent = {
-            path: '/foo/more/specific/path',
+            httpMethod: 'GET',
         } as APIGatewayEvent;
 
         const routerForDict = router(dict);

@@ -1,43 +1,88 @@
 # fp-ts-lambda-routing
 
-This library offers some simple routing capabilities for AWS Lambda using the fp-ts library. 
+This library offers some simple routing capabilities for AWS Lambda using the fp-ts library.
 
-You pass in a list of functions that return a TaskEither. The router will return that TaskEither if a route is found. Else, it will return an TaskEither `left`.
+Its primary use case is when you have an API Gateway that forwards all calls to a single ('fat') Lambda.
+There are bigger, more complex libraries to serve this purpose (lambda-api, serverless-express) - 
+but most of them have the (Express) habit of passing on additional parameters (request, response, next), something
+I prefer to avoid.
 
-## Requirements
+## How it works
 
-The fp-ts library should be installed.
+You pass in a list of functions that return a TaskEither. The router will return that TaskEither if a route is found. 
+
+Else, it will return an TaskEither `left` with a (customizable) error.
 
 ## Examples
 
 Also see the project unit tests.
 
-### Simple Examples
+Simple example:
 
 ```typescript
 import * as TE from 'fp-ts/TaskEither';
+import * as T from 'fp-ts/Task';
+import {pipe} from "fp-ts/function";
+import type {APIGatewayEvent} from "aws-lambda";
 import { router } from 'fp-ts-lambda-routing';
 
-const handleFirstRoute = () => TE.right('OK');
-const handleSecondRoute = () => TE.left('Error');
-
 const endpoints = {
-    '/one': handleFirstRoute,
-    '/two': handleSecondRoute,
+    '/foo': {
+        'POST': () => TE.right('OK')
+    }
+};
+const ourRouter = router(endpoints);
+
+const example = () => {
+    return pipe(
+        ourRouter({path: '/foo', httpMethod: 'POST'} as APIGatewayEvent),
+        TE.getOrElse((r) => T.of(`Got back some error: ${r}`))
+    )();
 };
 
-// can also be a V2 event
-const event = {
-    path: '/one',
-    // other properties
-};
-
-const routerForDict = router(endpoints);
-
-// will return TaskEither containing 'OK'
-const result = routerForDict(event);
+// prints 'OK'
+example().then(console.log);
 ```
 
+The code will also work with the more recent event payloads (`APIGatewayProxyEventV2`).
+
+```typescript
+import * as TE from 'fp-ts/TaskEither';
+import * as T from 'fp-ts/Task';
+import {pipe} from "fp-ts/function";
+import type {APIGatewayEvent} from "aws-lambda";
+import { router } from 'fp-ts-lambda-routing';
+
+const endpoints = {
+    '/foo': {
+        'POST': () => TE.right('OK')
+    }
+};
+
+const exampleEvent = {
+    requestContext: {
+        http: {
+            path: '/foo',
+            method: 'POST',
+        }
+    }
+} as APIGatewayProxyEventV2;
+
+const ourRouter = router(endpoints);
+
+const example = () => {
+    return pipe(
+        ourRouter({path: '/foo', httpMethod: 'POST'} as APIGatewayEvent),
+        TE.getOrElse((r) => T.of(`Got back some error: ${r}`))
+    )();
+};
+
+// prints 'OK'
+example().then(console.log);
+```
+
+A left is returned if there is an error.
+
 ```typescript
 import * as TE from 'fp-ts/TaskEither';
 import { router } from 'fp-ts-lambda-routing';
@@ -45,7 +90,9 @@ import { router } from 'fp-ts-lambda-routing';
 const handleFirstRoute = () => TE.right('OK');
 
 const endpoints = {
-    '/one': handleFirstRoute,
+    '/one': {
+        'POST': handleFirstRoute,
+    },
 };
 
 const event = {
@@ -59,30 +106,6 @@ const routerForDict = router(endpoints);
 const result = routerForDict(event);
 ```
 
-```typescript
-import * as TE from 'fp-ts/TaskEither';
-import * as T from 'fp-ts/Task';
-import {pipe} from "fp-ts/function";
-import { router } from 'fp-ts-lambda-routing';
-
-const endpoints = {
-    '/foo': () => TE.right('OK')
-};
-const ourRouter = router(endpoints, String);
-
-const example = () => {
-    return pipe(
-        ourRouter({path: '/foo'} as any),
-        TE.getOrElse((r) => T.of(`Got back some error: ${r}`))
-    )();
-};
-
-// prints 'OK'
-example().then(console.log);
-```
-
-### Wildcards
-
 Endpoints can end with a wildcard.
 
 ```typescript
@@ -92,21 +115,24 @@ import { router } from 'fp-ts-lambda-routing';
 const handleFirstRoute = () => TE.right('OK');
 
 const endpoints = {
-    '/one/*': handleFirstRoute,
+    '/one/*': {
+        'POST': handleFirstRoute,
+    },
 };
 
 const event = {
     path: '/one/two',
+    httpMethod: 'POST',
     // other properties
 };
 
 const routerForDict = router(endpoints);
 
 // will return TaskEither containing 'OK'
-const result = routerForDict(someAWSLambdaEvent);
+const result = routerForDict(event);
 ```
 
-However, endpoints without wildcard are preferred.
+Endpoints without wildcard are preferred above those with a wildcard.
 
 ```typescript
 import * as TE from 'fp-ts/TaskEither';
@@ -116,19 +142,24 @@ const handleFirstRoute = () => TE.right('wildcard');
 const handleSecondRoute = () => TE.left('no wildcard');
 
 const endpoints = {
-    '/one/*': handleFirstRoute,
-    '/one/two': handleSecondRoute,
+    '/one/*': {
+        'POST': handleFirstRoute,
+    },
+    '/one/two': {
+        'POST': handleSecondRoute,
+    },
 };
 
 const event = {
     path: '/one/two',
+    httpMethod: '/one/two'
     // other properties
 };
 
 const routerForDict = router(endpoints);
 
 // will return TaskEither containing 'no wildcard'
-const result = routerForDict(someAWSLambdaEvent);
+const result = routerForDict(event);
 ```
 
 ## Custom Error Constructor
@@ -147,10 +178,15 @@ const errorConstructor = (path: string) => {
     }
 }
 
-// any errors will now return an object with status and message
+// any errors will now return an object with status 400 and a message
 const routerForDict = router(dict, errorConstructor);
 ```
 
-## TODOs
+## Requirements
+
+fp-ts is used both within the library and as part of the types.
+
+## Possible improvements
 
 - should ideally also support other monads, definitely `Either`
+- allow 'ANY' as a catch-all http method

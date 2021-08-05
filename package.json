@@ -1,6 +1,6 @@
 {
   "name": "fp-ts-lambda-routing",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Library that helps with routing lambda events to the right function, wrapped in an fp-ts monad",
   "keywords": [
     "fp-ts",
